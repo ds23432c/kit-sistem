@@ -383,38 +383,27 @@ async function renderWordleStage(mount) {
   }
 }
 
-// ---------- TIC-TAC-TOE ----------
+// ---------- TIC-TAC-TOE (только против ПК) ----------
 function renderTtt(mount) {
-  let game = null, poll = null, botTimer = null, finishedHandled = false;
-  mount.innerHTML = '<div class="card center"><div class="tstatus">Ищу соперника… 🔍</div></div>';
+  let game = null;
 
-  const stop = () => { clearInterval(poll); clearTimeout(botTimer); };
-  // покинуть страницу — остановить поллинг
-  const backBtn = document.getElementById('back');
-  if (backBtn) backBtn.addEventListener('click', stop, { once: true });
+  mount.innerHTML = '<div class="card center"><div class="tstatus">Запускаю игру… 🤖</div></div>';
 
   async function start() {
-    try { game = await api('POST', '/ttt/find'); }
-    catch (e) { mount.innerHTML = `<div class="card center"><div class="tstatus">${esc(e.message)}</div></div>`; return; }
-    drawGame();
-    poll = setInterval(refresh, 1500);
-    if (game.status === 'waiting') {
-      botTimer = setTimeout(async () => {
-        if (game && game.status === 'waiting') {
-          try { game = await api('POST', '/ttt/bot', { gameId: game.gameId }); drawGame(); } catch (e) {}
-        }
-      }, 8000);
-    }
-  }
-  async function refresh() {
-    if (!game) return;
     try {
-      const prev = game.status;
-      game = await api('GET', '/ttt/state?gameId=' + game.gameId);
-      if (prev === 'waiting' && game.status === 'playing') clearTimeout(botTimer);
-      drawGame();
-    } catch (e) {}
+      // создаём ожидающую игру
+      game = await api('POST', '/ttt/find');
+      // сразу переключаем на бота
+      if (game.status === 'waiting') {
+        game = await api('POST', '/ttt/bot', { gameId: game.gameId });
+      }
+    } catch (e) {
+      mount.innerHTML = `<div class="card center"><div class="tstatus">${esc(e.message)}</div></div>`;
+      return;
+    }
+    drawGame();
   }
+
   async function move(cell) {
     if (!game || game.status !== 'playing' || game.turn !== game.you) return;
     if (game.board[cell] !== '.') return;
@@ -426,23 +415,20 @@ function renderTtt(mount) {
       drawGame();
     } catch (e) {}
   }
+
   function drawGame() {
     mount.innerHTML = '';
     const card = $(`<div class="card center"></div>`);
     let status = '';
-    if (game.status === 'waiting') status = 'Ищу соперника… 🔍 (через 8 сек сыграешь с компьютером 🤖)';
-    else if (game.status === 'playing') {
-      status = game.turn === game.you ? 'Твой ход!' : `Ходит ${game.you === 'X' ? (game.oName || 'соперник') : (game.xName || 'соперник')}…`;
+    if (game.status === 'playing') {
+      status = game.turn === game.you ? 'Твой ход (X)' : 'Ходит компьютер… 🤖';
     } else if (game.status === 'finished') {
-      stop();
-      if (!finishedHandled) finishedHandled = true;
       if (game.winner === 'D') status = '🤝 Ничья!';
       else if (game.winner === game.you) status = '🎉 Победа!';
-      else status = '😅 В этот раз не повезло';
+      else status = '🤖 Компьютер победил';
     }
     card.appendChild($(`<div class="tstatus">${status}</div>`));
-    card.appendChild($(`<div class="muted" style="font-size:13px">Ты играешь за <b style="color:${game.you === 'X' ? 'var(--cyan)' : 'var(--pink)'}">${game.you || '—'}</b>
-      · X: ${esc(game.xName || '…')} · O: ${esc(game.oName || '…')}</div>`));
+
     const board = $(`<div class="ttt"></div>`);
     for (let i = 0; i < 9; i++) {
       const ch = game.board[i];
@@ -451,13 +437,15 @@ function renderTtt(mount) {
       board.appendChild(cell);
     }
     card.appendChild(board);
+
     if (game.status === 'finished') {
-      const b = $(`<button class="btn primary big" style="margin-top:8px">К этапам →</button>`);
-      b.onclick = () => loadProgress().then(() => go('hub'));
+      const b = $(`<button class="btn primary big" style="margin-top:12px">🔄 Сыграть ещё</button>`);
+      b.onclick = () => { start(); };
       card.appendChild(b);
     }
     mount.appendChild(card);
   }
+
   start();
 }
 
