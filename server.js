@@ -187,7 +187,7 @@ app.post('/api/answer', requireAuth, async (req, res) => {
   const uid = req.user.id;
   const { stage, qid, answer } = req.body || {};
   const def = getStage(stage);
-  if (!def || def.type !== 'quiz') return res.status(400).json({ error: 'Этап не найден' });
+  if (!def || (def.type !== 'quiz' && def.type !== 'neural')) return res.status(400).json({ error: 'Этап не найден' });
   const q = def.questions.find((x) => x.id === qid);
   if (!q) return res.status(400).json({ error: 'Вопрос не найден' });
 
@@ -323,24 +323,28 @@ async function gameView(g, uid) {
   };
 }
 
-// награды за завершённую партию (вызывается один раз — в ходе, который её завершил)
+// награды за завершённую партию (только победа игрока X засчитывает этап)
 async function awardTtt(g) {
-  const tasks = [];
-  const give = (uid, n) => { if (uid) tasks.push(addPoints(uid, n)); };
-  if (g.winner === 'D') { give(g.x_user, 150); give(g.o_user, 150); }
-  else if (g.winner === 'X') { give(g.x_user, 300); give(g.o_user, 50); }
-  else if (g.winner === 'O') { give(g.o_user, 300); give(g.x_user, 50); }
-  await Promise.all(tasks);
   const out = {};
-  if (g.x_user) out.x = await evalAchievements(g.x_user);
-  if (g.o_user) out.o = await evalAchievements(g.o_user);
+  // Если игрок (X) победил — +100 очков и этап пройден
+  if (g.winner === 'X' && g.x_user) {
+    await addPoints(g.x_user, 100);
+    await pool.query(
+      `INSERT INTO stage_progress (user_id, stage, done, points, finished_at)
+       VALUES (?, 'ttt', 1, ?, NOW())
+       ON DUPLICATE KEY UPDATE done=1, finished_at=NOW()`,
+      [g.x_user, 100]
+    );
+    out.x = await evalAchievements(g.x_user);
+  }
+  // Поражение или ничья — ничего не даём
   return out;
 }
 
 app.post('/api/ttt/find', requireAuth, async (req, res) => {
   const uid = req.user.id;
-  if ((await stagesDoneCount(uid)) < 2) {
-    return res.status(403).json({ error: 'Этап откроется после 2 пройденных этапов' });
+  if ((await stagesDoneCount(uid)) < 6) {
+    return res.status(403).json({ error: 'Этап откроется после 6 пройденных этапов' });
   }
   // уже в активной игре?
   const [[active]] = await pool.query(

@@ -82,7 +82,7 @@ function renderLanding() {
   <div class="hero">
     <span class="eyebrow">Проф-ориентация · Разработка и управление ПО</span>
     <h1>Стань <span class="grad">IT-героем</span><br>за 20 минут</h1>
-    <p class="lead">Соревновательный квест из 7 этапов: ребусы, код, игры и крестики-нолики вживую.
+    <p class="lead">Соревновательный квест из 8 этапов: ребусы, код, игры и крестики-нолики против ПК.
     Зарабатывай очки, открывай достижения и поднимайся в живом рейтинге.</p>
     <div class="cta">
       <button class="btn primary big" id="bStart">🚀 Войти и начать</button>
@@ -271,6 +271,7 @@ function renderStage(key) {
   if (s.type === 'quiz') return renderQuiz(s, mount);
   if (s.type === 'wordle') return renderWordleStage(mount);
   if (s.type === 'ttt') return renderTtt(mount);
+  if (s.type === 'neural') return renderNeural(s, mount);
 }
 
 // ---------- QUIZ ----------
@@ -447,6 +448,44 @@ function renderTtt(mount) {
   }
 
   start();
+}
+
+// ---------- НЕЙРО-СЛОП ----------
+function renderNeural(s, mount) {
+  const answered = PROGRESS.answers.find((a) => a.stage === 'neural');
+  if (answered) {
+    mount.innerHTML = `<div class="card center"><div style="font-size:54px">👍</div><h2>Финальный босс пройден!</h2><p class="muted">Ты угадал, что нарисовала нейросеть. Настоящий IT-герой!</p>
+      <button class="btn primary big" onclick="boot()">🏠 На главную</button></div>`;
+    return;
+  }
+
+  const card = $(`<div class="card center"></div>`);
+  card.appendChild($(`<p class="muted" style="margin-bottom:14px">Нейросеть сгенерировала картинку в стиле «AI slop». Что здесь изображено?</p>`));
+  const img = $(`<img src="/neural.png" style="width:100%;max-width:380px;border-radius:16px;border:2px solid var(--line2);margin-bottom:16px">`);
+  card.appendChild(img);
+
+  // options
+  const opts = $(`<div style="display:flex;flex-direction:column;gap:8px;max-width:320px;margin:0 auto"></div>`);
+  const q = s.questions[0];
+  q.options.forEach((o, i) => {
+    const b = $(`<button class="opt">${esc(o)}</button>`);
+    b.onclick = async () => {
+      opts.querySelectorAll('.opt').forEach((x) => x.classList.add('disabled'));
+      try {
+        const r = await api('POST', '/answer', { stage: 'neural', qid: 'n1', answer: i });
+        opts.querySelectorAll('.opt')[r.correctIndex].classList.add('correct');
+        if (i !== r.correctIndex) b.classList.add('wrong');
+        if (r.points != null) { ME.points = r.points; renderTop(); }
+        toast(r.newAchievements);
+        setTimeout(() => loadProgress().then(() => go('hub')), 2000);
+      } catch (e) {
+        opts.querySelectorAll('.opt').forEach((x) => x.classList.remove('disabled'));
+      }
+    };
+    opts.appendChild(b);
+  });
+  card.appendChild(opts);
+  mount.appendChild(card);
 }
 
 // ---------- LEADERBOARD ----------

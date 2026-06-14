@@ -46,18 +46,12 @@ function minimax(board, me, current) {
   return best;
 }
 
-// Ход бота. botSym — символ бота. Делаем сильным, но не идеальным:
-// в 30% случаев ходит случайно, чтобы школьники могли выигрывать.
+// Ход бота — идеальный минимакс (без случайностей)
 function botMove(board, botSym) {
   const empties = emptyCells(board);
   if (empties.length === 0) return board;
-  let cell;
-  if (Math.random() < 0.30) {
-    cell = empties[Math.floor(Math.random() * empties.length)];
-  } else {
-    cell = minimax(board, botSym, botSym).move;
-    if (cell === undefined) cell = empties[0];
-  }
+  let cell = minimax(board, botSym, botSym).move;
+  if (cell === undefined) cell = empties[0];
   return setCell(board, cell, botSym);
 }
 
